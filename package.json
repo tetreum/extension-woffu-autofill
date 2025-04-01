@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "build": "zip -r build/toffu_latest.zip ext; echo \"\n== 🎉 BUILD DONE. Please remember to update Manifest.json version!! ==\n\""
+  }
+}

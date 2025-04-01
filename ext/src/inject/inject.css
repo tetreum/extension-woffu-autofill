@@ -1,0 +1,17 @@
+.dropdown {
+	left: 20%;
+	top: 10px;
+	position: absolute;
+	z-index: 99999;
+ }
+ .text-danger {
+	 color: red;
+ }
+ .dropdown-menu {
+	background-color: white;
+	padding: 5px;
+	border: 2px solid
+ }
+ .dropdown-menu:not(.show) {
+	 display: none;
+ }
