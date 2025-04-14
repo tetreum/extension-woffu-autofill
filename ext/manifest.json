@@ -1,6 +1,6 @@
 {
   "name": "Toffu - Autofill Woffu schedule",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "manifest_version": 3,
   "description": "Simplifies your Woffu experience by filling multiple dates at once",
   "icons": {
