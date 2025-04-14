@@ -1,366 +1,496 @@
-
 (async function() {
-  'use strict';
-
-  let userToken;
-  let departmentId;
-  let scheduleId;
-  let calendarId;
-  let userId;
-
-  const api = async (route, params, method) =>
-  {
+    'use strict';
+  
+    let userToken;
+    let departmentId;
+    let scheduleId;
+    let calendarId;
+    let userId;
+  
+    const api = async (route, params, method) =>
+    {
       const BASE_URL = "https://" + location.hostname + '/api/';
-
+  
       if (typeof params === "undefined" || params == null) {
-          params = {};
+        params = {};
       }
       if (typeof method === "undefined" || method == null) {
-          method = "get";
+        method = "get";
       }
-
+  
       let request = {
-          method: method,
+        method: method,
       };
-
+  
       let paramList;
-
+  
       // json body or already a FormData
       if (params instanceof FormData || params instanceof URLSearchParams) {
-          paramList = params;
+        paramList = params;
       } else if (typeof params === "string") {
-          request.headers = {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json'
-          };
-          paramList = params;
-      } else {
-          if (method === "post") {
-              paramList = new FormData();
-          } else {
-              paramList = new URLSearchParams();
-          }
-
-          for (let k in params) {
-              if (!params.hasOwnProperty(k)) {continue;}
-              paramList.append(k, params[k]);
-          }
+        request.headers = {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        };
+        paramList = params;
+      } else if(typeof params !== "string") {
+        if (method === "post") {
+          paramList = new FormData();
+        } else {
+          paramList = new URLSearchParams();
+        }
+  
+        for (let k in params) {
+          if (!params.hasOwnProperty(k)) {continue;}
+          paramList.append(k, params[k]);
+        }
       }
-
+  
       if (method === "post" || method === "put") {
-          request.body = paramList;
+        request.body = paramList;
       } else {
-          route = route + "?" + paramList;
+        route = route + "?" + paramList;
       }
-
+  
       if (typeof request.headers === "undefined") {
-          request.headers = {};
+        request.headers = {};
       }
       if (userToken) {
-          request.headers['Authorization'] = "Bearer " + userToken;
+        request.headers['Authorization'] = "Bearer " + userToken;
       }
-
+  
       return new Promise((resolve, reject) => {
-          fetch(BASE_URL + route, request)
-            .then(response => response.json().then(resolve))
+        fetch(BASE_URL + route, request)
+          .then(response => response.json().then(resolve))
           .catch(error => reject(error));
       });
-  };
-
-  const getUserToken = async () => {
+    };
+  
+    const getUserToken = async () => {
       const response = await api('users/token');
-
+  
       if (response) {
-          return response.Token;
+        return response.Token;
       }
       return null;
-  };
-
-  const parseUserToken = (token) => {
+    };
+  
+    const parseUserToken = (token) => {
       token = token.split(".")[1];
       return JSON.parse(atob(token));
-  };
-
-  const getPresence = async (userId, start, end) => {
+    };
+  
+    const getPresence = async (userId, start, end) => {
       return (await api('users/' + userId + '/diaries/presence', {
-          fromDate: start,
-          toDate: end,
-          pageIndex: 0,
-          pageSize: 31,
+        fromDate: start,
+        toDate: end,
+        pageIndex: 0,
+        pageSize: 31,
       }, "get")).Diaries;
-  };
-
-  const getDateRange = () => {
+    };
+  
+    const getPendingPresence = async (companyId, start, end) => {
+      return (await api('companies/' + companyId + '/diaries/presence', JSON.stringify({
+        fromDate: start,
+        toDate: end,
+        "OnlyNotAccepted": true,
+        "PageIndex": 0,
+        "PageSize": 31,
+        "Scope": {
+          "ScopeDetails": []
+        }
+      }), "post")).Diaries;
+    };
+  
+    const getDateRange = () => {
       let response = {};
       const inputs = document.querySelectorAll('.react-datepicker__input-container input');
       const format = understandDateFormat();
       [
-          {
-              val: inputs[0].value,
-              field: "start",
-          },
-          {
-              val: inputs[1].value,
-              field: "end",
-          }
+        {
+          val: inputs[0].value,
+          field: "start",
+        },
+        {
+          val: inputs[1].value,
+          field: "end",
+        }
       ].forEach(date => {
-          const parts = date.val.split(format.separator);
-          let parsedDate = {};
-          parts.forEach((part, i) => {
-              parsedDate[format.map[i]] = part;
-          });
-
-          response[date.field] = parsedDate.year + "-" + parsedDate.month + "-" + parsedDate.day;
+        const parts = date.val.split(format.separator);
+        let parsedDate = {};
+        parts.forEach((part, i) => {
+          parsedDate[format.map[i]] = part;
+        });
+  
+        response[date.field] = parsedDate.year + "-" + parsedDate.month + "-" + parsedDate.day;
       });
-
+  
       return response;
-  };
-
-  const understandDateFormat = () => {
+    };
+  
+    const understandDateFormat = () => {
       const separator = new Date().toLocaleDateString().replaceAll(/\d/g, '').substr(0, 1);
       let map;
-
+  
       if (getLang() === 'en') {
-          map = {
-              0: "month",
-              1: "day",
-              2: "year"
-          };
+        map = {
+          0: "month",
+          1: "day",
+          2: "year"
+        };
       } else {
-          map = {
-              0: "day",
-              1: "month",
-              2: "year"
-          };
+        map = {
+          0: "day",
+          1: "month",
+          2: "year"
+        };
       }
-
+  
       return {
-          separator,
-          map
+        separator,
+        map
       };
-  }
-
-  const getLang = () => {
+    }
+  
+    const getLang = () => {
       // can't use document.lang as those retards take ages to properly set it
       return getAllH2Contents().includes('Mi Presencia') ? 'es' : 'en';
-  }
-
-  const getDayTemplate = (day) => {
+    }
+  
+    const getPresenceTemplate = (day) => {
       const date = day.Date.split('T')[0];
-
+  
       const li = document.createElement('li');
       li.dataset.removable = true;
       li.style.marginLeft = "5px";
       li.innerHTML = `
-          <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="` + day.DiaryId + `" data-date="` + date + `" id="autodate-` + date + `" checked>
-              <label class="form-check-label" for="autodate-` + date + `" style="display: inline-block;">
-                  ` + date + `<span class="text-danger"> ` + day.DiffFormatted.Values[0] + `h</span>
-              </label>
-          </div>
-      `;
-
+              <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="` + day.DiaryId + `" data-date="` + date + `" id="autodate-` + date + `" checked>
+                  <label class="form-check-label" for="autodate-` + date + `" style="display: inline-block;">
+                      ${date} - ${day.User.FullName} - <span class="text-danger"> ${day.TrueScheduleHours}h</span>
+                  </label>
+              </div>
+          `;
+  
       return li;
-  }
-
-  const calculateSlotTime = (start, end) => {
+    }
+  
+    const getDayTemplate = (day) => {
+      const date = day.Date.split('T')[0];
+  
+      const li = document.createElement('li');
+      li.dataset.removable = true;
+      li.style.marginLeft = "5px";
+      li.innerHTML = `
+              <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="` + day.DiaryId + `" data-date="` + date + `" id="autodate-` + date + `" checked>
+                  <label class="form-check-label" for="autodate-` + date + `" style="display: inline-block;">
+                      ` + date + `<span class="text-danger"> ` + day.DiffFormatted.Values[0] + `h</span>
+                  </label>
+              </div>
+          `;
+  
+      return li;
+    }
+  
+    const calculateSlotTime = (start, end) => {
       const startDate = new Date();
       startDate.setHours(parseInt(start));
       startDate.setMinutes(parseInt(start.split(':')[1]));
-
+  
       const endDate = new Date();
       endDate.setHours(parseInt(end));
       endDate.setMinutes(parseInt(end.split(':')[1]));
-
+  
       return parseInt(Math.abs(endDate - startDate) / 36e5);
-  }
-
-  const createSlot = (start, end, order) => {
+    }
+  
+    const createSlot = (start, end, order) => {
       return {
-          "Motive":null,
-          "In":{
-              "Time": start,
-              "new":true,
-              "SignStatus":1,
-              "SignType":3,
-              "SignId":0,
-              "AgreementEventId":null,
-              "RequestId":null
-          },
-          "Out":{
-              "Time": end,
-              "new":true,
-              "SignStatus":1,
-              "SignType":3,
-              "SignId":0,
-              "AgreementEventId":null,
-              "RequestId":null
-          },
-          "totalSlot": calculateSlotTime(start, end),
-          "order": order
+        "Motive":null,
+        "In":{
+          "Time": start,
+          "new":true,
+          "SignStatus":1,
+          "SignType":3,
+          "SignId":0,
+          "AgreementEventId":null,
+          "RequestId":null
+        },
+        "Out":{
+          "Time": end,
+          "new":true,
+          "SignStatus":1,
+          "SignType":3,
+          "SignId":0,
+          "AgreementEventId":null,
+          "RequestId":null
+        },
+        "totalSlot": calculateSlotTime(start, end),
+        "order": order
       };
-  }
-
-  const getTimeWindows = () => {
+    }
+  
+    const getTimeWindows = () => {
       const totalSlots = 2;
       const slots = [];
-
+  
       for (let i = 1; i <= totalSlots; i++) {
-          slots.push(createSlot(document.querySelector('[name="af-window-' + i + '-start"]').value, document.querySelector('[name="af-window-' + i + '-end"]').value, i));
+        slots.push(createSlot(document.querySelector('[name="af-window-' + i + '-start"]').value, document.querySelector('[name="af-window-' + i + '-end"]').value, i));
       }
-
+  
       return slots;
-  };
-
-  const submitAutofill = async (selectedDays, submitButton) => {
+    };
+  
+    const submitAutoValidation = async (selectedDays, submitButton) => {
       if (selectedDays.length < 1) {
-          return;
+        return;
       }
-
-      submitButton.setAttribute('disabled', 'disabled');
-
-      const slots = getTimeWindows();
-
+      const list = [];
       for (const selectedDay of selectedDays) {
-          const dairyId = selectedDay.value;
-          const date = selectedDay.dataset.date;
-          const params = {
-              "DiaryId": dairyId,
-              "UserId": userId,
-              "Date": date + "T00:00:00.000",
-              "DepartmentId": departmentId,
-              "JobTitleId":null,
-              "CalendarId": calendarId,
-              "ScheduleId": scheduleId,
-              "AgreementId":null,
-              "TrueStartTime":null,
-              "TrueEndTime":null,
-              "TrueBreaksHours":1,
-              "Accepted":false,
-              "Comments":null,
-              "Slots": slots
-          };
-
-          // one by one to prevent getting banned
-          try {
-              await api("diaries/" + dairyId + "/workday/slots/self", JSON.stringify(params), 'put');
-          } catch (e) {console.log(e)}
+        list.push(selectedDay.value);
       }
-
+  
+      submitButton.setAttribute('disabled', 'disabled');
+      try {
+        await api("users/diaries/accept", JSON.stringify({"Diaries": list}), 'put');
+      } catch (e) {console.log(e)}
+  
+      alert("Done :) Reload the page to check if it worked");
+    }
+    const submitAutofill = async (selectedDays, submitButton) => {
+      if (selectedDays.length < 1) {
+        return;
+      }
+  
+      submitButton.setAttribute('disabled', 'disabled');
+  
+      const slots = getTimeWindows();
+  
+      for (const selectedDay of selectedDays) {
+        const dairyId = selectedDay.value;
+        const date = selectedDay.dataset.date;
+        const params = {
+          "DiaryId": dairyId,
+          "UserId": userId,
+          "Date": date + "T00:00:00.000",
+          "DepartmentId": departmentId,
+          "JobTitleId":null,
+          "CalendarId": calendarId,
+          "ScheduleId": scheduleId,
+          "AgreementId":null,
+          "TrueStartTime":null,
+          "TrueEndTime":null,
+          "TrueBreaksHours":1,
+          "Accepted":false,
+          "Comments":null,
+          "Slots": slots
+        };
+  
+        // one by one to prevent getting banned
+        try {
+          await api("diaries/" + dairyId + "/workday/slots/self", JSON.stringify(params), 'put');
+        } catch (e) {console.log(e)}
+      }
+  
       alert("done, reload to actually check if it worked");
       submitButton.removeAttribute('disabled');
-
-  };
-
-  const getContainerTemplate = () => {
+  
+    };
+  
+    const getContainerTemplate = (isForPresence) => {
       const div = document.createElement('div');
       div.classList.add('dropdown');
       div.style.display = 'inline-block';
-
-      div.innerHTML = `
-          <ul class="dropdown-menu" style="overflow: auto; text-align: left">
-              <li style="margin-left: 5px">
-                  <strong>Entrada - Salida</strong>
-                  <div>
-                      <input name="af-window-1-start" value="09:00" type="time" class="form-control" style="padding-right:0px">
-                      <input name="af-window-1-end" value="14:00" type="time" class="form-control" style="margin-left: 0px">
-                  </div>
-                  <div>
-                      <input name="af-window-2-start" value="16:00" type="time" class="form-control" style="padding-right:0px">
-                      <input name="af-window-2-end" value="19:00" type="time" class="form-control" style="margin-left: 0px">
-                  </div>
-                  <button class="btn btn-primary" type="button" style="width:100%">Autofill</button>
-                  <hr>
-              </li>
-          </ul>
-      `;
+  
+      let tpl =  `
+      <style>
+      .dropdown {
+          left: 20%;
+          top: 10px;
+          position: absolute;
+          z-index: 99999;
+       }
+       .text-danger {
+           color: red;
+       }
+       .dropdown-menu {
+          background-color: white;
+          padding: 5px;
+          border: 2px solid
+       }
+       .dropdown-menu:not(.show) {
+           display: none;
+       }
+      </style>
+      <ul id="toffu-modal" class="dropdown-menu" style="overflow: auto; text-align: left">`;
+  
+      if (!isForPresence) {
+        tpl += `<li style="margin-left: 5px">
+                      <strong>Entrada - Salida</strong>
+                      <div>
+                          <input name="af-window-1-start" value="09:00" type="time" class="form-control" style="padding-right:0px">
+                          <input name="af-window-1-end" value="14:00" type="time" class="form-control" style="margin-left: 0px">
+                      </div>
+                      <div>
+                          <input name="af-window-2-start" value="16:00" type="time" class="form-control" style="padding-right:0px">
+                          <input name="af-window-2-end" value="19:00" type="time" class="form-control" style="margin-left: 0px">
+                      </div>
+                      <button class="btn btn-primary" type="button" style="width:100%">Autofill</button>
+                      <hr>
+                  </li>
+          `;
+      } else {
+        let startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0); // Optional: Set time to midnight
+        startOfMonth = startOfMonth.toISOString().split("T")[0];
+  
+        let endOfMonth = new Date();
+        endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0); // Move to next month, then set day to 0 (last day of previous month)
+        endOfMonth.setHours(23, 59, 59, 999); // Optional: Set time to end of the day
+        endOfMonth = endOfMonth.toISOString().split("T")[0];
+  
+        tpl += `<li style="margin-left: 5px">
+                      <strong>Range</strong>
+                      <div>
+                          <input name="start" value="${startOfMonth}" type="date" class="form-control" style="padding-right:0px">
+                          <input name="end" value="${endOfMonth}" type="date" class="form-control" style="padding-right:0px">
+                      </div>
+                      <button class="btn btn-primary" type="button" style="width:100%">Accept</button>
+                      <hr>
+                  </li>
+          `;
+      }
+      div.innerHTML = tpl + "</ul>";
       const submitButton = div.querySelector('button');
       submitButton.addEventListener('click', () => {
+        if (isForPresence) {
+          submitAutoValidation(div.querySelectorAll('input:checked'), submitButton);
+        } else {
           submitAutofill(div.querySelectorAll('input:checked'), submitButton);
+        }
       });
       const ul = div.querySelector('ul');
-
+  
       const button = document.createElement('button');
       button.classList.add('btn', 'btn-secondary', 'dropdown-toggle')
       button.type = "button";
       button.innerHTML = 'AutoFill <i class="fa fa-chevron-down"></i>';
       button.addEventListener('click', () => {
-          ul.classList.toggle('show');
+        ul.classList.toggle('show');
       });
-
+  
       div.appendChild(button);
       div.appendChild(ul);
-
+  
+      if (isForPresence) {
+        div.querySelector('[name="start"]').addEventListener('change', () => {
+            showNonAcceptedDays(ul);
+        });
+        div.querySelector('[name="end"]').addEventListener('change', () => {
+            showNonAcceptedDays(ul);
+        });
+      }
+  
       return div;
-  }
-
-  const setGlobalData = (day) => {
+    }
+  
+    const setGlobalData = (day) => {
       departmentId = day.DepartmentId;
       scheduleId = day.ScheduleId;
       calendarId = day.CalendarId;
       userId = day.UserId;
-  };
-
-  const removeOldEntries = () => {
+    };
+  
+    const removeOldEntries = () => {
       document.querySelectorAll('li[data-removable="true"]').forEach(el => {
-          el.remove();
+        el.remove();
       });
-  }
-
-  const showUnfilledDays = async (ul) => {
+    }
+  
+    const showUnfilledDays = async (ul) => {
       removeOldEntries();
       const user = parseUserToken(userToken);
       const dateRange = getDateRange();
       const days = await getPresence(user.UserId, dateRange.start, dateRange.end);
       const pendingDays = [];
-
+  
       setGlobalData(days[0]);
-
+  
       for (const day of days) {
-          // we only want negative days
-          if (parseInt(day.DiffFormatted.Values[0]) < 0 && !day.TrueStartTime && day.IsUserEditable) {
-              pendingDays.push(day);
-          }
+        // we only want negative days
+        if (parseInt(day.DiffFormatted.Values[0]) < 0 && !day.TrueStartTime && day.IsUserEditable) {
+          pendingDays.push(day);
+        }
       }
-
+  
       for (const day of pendingDays) {
-          const tpl = getDayTemplate(day);
-
-          ul.appendChild(tpl);
+        const tpl = getDayTemplate(day);
+  
+        ul.appendChild(tpl);
       }
-  };
-
-  const getAllH2Contents = () => {
+    };
+  
+    const showNonAcceptedDays = async (ul) => {
+      removeOldEntries();
+      const user = parseUserToken(userToken);
+      const modal = document.getElementById("toffu-modal");
+  
+      const days = await getPendingPresence(user.CompanyId, modal.querySelector('[name="start"]').value, modal.querySelector('[name="end"]').value);
+  
+      setGlobalData(days[0]);
+  
+      for (const day of days) {
+        // skip weekend schedules
+        if ([0, 6].includes((new Date(day.Date)).getDay())) {
+          continue;
+        }
+        const tpl = getPresenceTemplate(day);
+        ul.appendChild(tpl);
+      }
+    };
+  
+    const getAllH2Contents = () => {
       let str = '';
       for (const el of document.querySelectorAll('h2')) {
-          str += ' ' + el.innerText;
+        str += ' ' + el.innerText;
       }
       return str;
-  }
-
-  const onLoaded = async () => {
-      if (document.querySelectorAll('.react-datepicker__input-container input').length < 2) {
-          setTimeout(onLoaded, 1000 * 1)
-          return;
+    }
+  
+    const onLoaded = async () => {
+      let condition;
+      let isPendingValidation = false;
+  
+      if (location.pathname === "/v2/corporate/diary/validate") {
+        isPendingValidation = true;
+        condition = document.querySelectorAll('[datepicker]').length < 2 && document.getElementById('woffu-legacy-app') == null;
+      } else {
+        condition = document.querySelectorAll('.react-datepicker__input-container input').length < 2;
       }
-
+      if (condition) {
+        setTimeout(onLoaded, 1000 * 1)
+        return;
+      }
       userToken = await getUserToken();
-
+  
       // not logged in
       if (!userToken) {
-          return;
+        return;
       }
-
-      const container = getContainerTemplate();
-
+      const container = getContainerTemplate(isPendingValidation);
       document.body.prepend(container);
-
+  
       container.querySelector('button').addEventListener('click', () => {
-          const ul = container.querySelector('ul');
+        const ul = container.querySelector('ul');
+        if (location.pathname === "/v2/corporate/diary/validate") {
+          showNonAcceptedDays(ul);
+        } else {
           showUnfilledDays(ul);
+        }
       });
-
-  };
-
-  onLoaded();
-})();
+  
+    };
+    onLoaded();
+  })();
